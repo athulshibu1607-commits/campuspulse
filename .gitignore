@@ -1,0 +1,8 @@
+# Runtime demo state (audit log, live records) — never commit
+data/
+*.tmp
+node_modules/
+# Local editor/OS junk
+.DS_Store
+Thumbs.db
+*.bak
