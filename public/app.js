@@ -276,9 +276,11 @@ function timelineCard(open) {
 }
 function hwCard() {
   const c = St.data.controller;
-  const st = !c.configured ? ['p-dark', 'Not configured'] : c.online ? ['p-ok', 'Online'] : ['p-crit', 'Offline'];
+  const nanoStale = c.online && c.nanoLink && c.nanoLink !== 'confirmed';
+  const st = !c.configured ? ['p-dark', 'Not configured'] : !c.online ? ['p-crit', 'Offline'] : nanoStale ? ['p-warn', 'Nano: no reply'] : ['p-ok', 'Online'];
   let line;
   if (!c.configured) line = 'Set the ESP32 address in Settings. Room 104 stays grey (UNKNOWN) until the controller reports.';
+  else if (c.online && nanoStale) line = 'ESP32 is reachable, but the Nano has not confirmed a command recently, so the relay state is UNKNOWN. Send ON or OFF to re-sync, and check the Nano power and wiring.';
   else if (c.online) line = `Relay reports <b>${esc(c.relay)}</b>${c.lastAck ? ` · last Nano ack: “${esc(c.lastAck)}”` : ''}<br><span class="small">${c.statusSource === 'nano' ? 'State reported by the Nano' : 'State = last command the Nano confirmed (START_ACCEPTED / STOP_ACCEPTED)'}</span>`;
   else line = `Controller unreachable (${esc(c.error || 'no response')}). Room 104 shown as UNKNOWN — never green.`;
   return `<div class="card dark pad-lg" style="margin-top:12px">
@@ -338,7 +340,7 @@ function mRoom(m) {
   if (r.repeatFlag) notes.push(['amber', 'flag', `Repeat issue: ${r.repeatCount} after-hours alerts in ${p.repeatWindowDays} days — maintenance ticket raised`]);
   if (r.unstable) notes.push(['amber', 'wifioff', `Unstable controller: offline ${p.offlineThreshold}+ times in ${p.offlineWindowHours}h`]);
   if (r.sweep && r.sweep.result) notes.push(['green', 'sweep', `Sweep: ${SWEEP_LBL[r.sweep.result]} by ${esc(r.sweep.by)} at ${hm(r.sweep.at)}`]);
-  if (!r.simulated) notes.push(['', 'cpu', c.configured ? (c.online ? `Controller online${c.mock ? ' (MOCK)' : ''} · relay reports ${esc(c.relay)}` : `Controller offline — ${esc(c.error || '')}`) : 'Controller not configured (Settings → ESP32 address)']);
+  if (!r.simulated) notes.push(['', 'cpu', c.configured ? (c.online ? (c.nanoLink && c.nanoLink !== 'confirmed' ? 'Nano: no recent confirmed reply, relay UNKNOWN' : `Controller online${c.mock ? ' (MOCK)' : ''} · relay reports ${esc(c.relay)}`) : `Controller offline — ${esc(c.error || '')}`) : 'Controller not configured (Settings → ESP32 address)']);
   const devRow = x => `<div class="dev-row">
     <div class="feed-ic">${ic(x.real ? 'cpu' : x.protected ? 'lock' : 'zap', 'sm')}</div>
     <div class="grow"><b>${esc(x.name)}</b><div class="muted small">${esc(x.type)}${x.real ? ' · state from controller report' : ''}</div>

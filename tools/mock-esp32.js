@@ -13,21 +13,27 @@
 const http = require('http');
 const PORT = Number(process.env.MOCK_PORT || 8081);
 let relay = 'ON', lastCmd = '', lastAck = '', down = false;
+// Mirrors the real firmware: the Nano's state is only trusted for 2 min after a confirmed command.
+const STALE_MS = Number(process.env.MOCK_STALE_MS || 120000);
+let lastOk = 0, everOk = false;
+const fresh = () => everOk && Date.now() - lastOk < STALE_MS;
+const nanoLink = () => (!everOk ? 'never-confirmed' : fresh() ? 'confirmed' : 'stale');
+const reported = () => (fresh() ? relay : 'UNKNOWN');
 
 http.createServer((req, res) => {
   if (down) { req.socket.destroy(); return; }
   const u = new URL(req.url, 'http://x');
   const send = (code, o) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(o)); };
-  if (u.pathname === '/status' || u.pathname === '/') return send(200, { device: 'mock-esp32 (NOT REAL HARDWARE)', online: true, relay, lastCmd, lastAck, statusSource: 'last-command', uptimeSec: Math.round(process.uptime()) });
+  if (u.pathname === '/status' || u.pathname === '/') return send(200, { device: 'mock-esp32 (NOT REAL HARDWARE)', online: true, relay: reported(), nanoLink: nanoLink(), lastCmd, lastAck, statusSource: 'nano-ack', uptimeSec: Math.round(process.uptime()) });
   if (u.pathname === '/cmd') {
     const c = String(u.searchParams.get('c') || '').toUpperCase();
     if (!['ON', 'OFF', 'STATUS'].includes(c)) return send(400, { ok: false, error: 'use c=ON, OFF or STATUS' });
     setTimeout(() => {
       lastCmd = c;
-      if (c !== 'STATUS') relay = c;
+      if (c !== 'STATUS') { relay = c; lastOk = Date.now(); everOk = true; }
       lastAck = c === 'STATUS' ? `RELAY ${relay}` : `OK RELAY ${c}`;
       console.log(`[mock] ${c} -> ack "${lastAck}"`);
-      send(200, { ok: true, sent: c, acknowledged: true, ack: lastAck, relay });
+      send(200, { ok: true, sent: c, acknowledged: true, ack: lastAck, relay: reported(), nanoLink: nanoLink() });
     }, 250);
     return;
   }

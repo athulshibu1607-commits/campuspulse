@@ -373,7 +373,7 @@ async function executeShutdown(sd) {
 /* ------------------------------------------------------------------ */
 /* ESP32 controller bridge                                            */
 /* ------------------------------------------------------------------ */
-const ctl = { configured: false, online: false, everSeen: false, lastSeen: null, relay: 'UNKNOWN', lastAck: null, lastCmd: null, device: null, statusSource: null, error: 'Not configured', mock: false, busy: false };
+const ctl = { configured: false, online: false, everSeen: false, lastSeen: null, relay: 'UNKNOWN', nanoLink: null, lastAck: null, lastCmd: null, device: null, statusSource: null, error: 'Not configured', mock: false, busy: false };
 const normRelay = v => { const s = String(v || '').toUpperCase(); return s === 'ON' || s === 'OFF' ? s : 'UNKNOWN'; };
 const ctlUrl = () => (S().esp32Url || '').trim().replace(/\/+$/, '');
 
@@ -407,6 +407,7 @@ async function pollController() {
     ctl.lastAck = j.lastAck ?? ctl.lastAck; ctl.lastCmd = j.lastCmd ?? ctl.lastCmd;
     ctl.device = j.device || 'esp32'; ctl.mock = /mock/i.test(ctl.device);
     ctl.statusSource = j.statusSource || null;
+    ctl.nanoLink = j.nanoLink || null;
     realDevice().state = ctl.relay;
     setOnline(true, null);
   } catch (e) { setOnline(false, e.name === 'AbortError' ? 'timed out' : e.message); }
@@ -418,6 +419,7 @@ async function controllerCommand(cmd) {
   try {
     const j = await fetchJSON(`${url}/cmd?c=${encodeURIComponent(cmd)}`, 5000);
     ctl.lastCmd = cmd; ctl.lastAck = j.ack ?? null; ctl.lastSeen = new Date().toISOString();
+    ctl.nanoLink = j.nanoLink || ctl.nanoLink;
     if (j.relay) { ctl.relay = normRelay(j.relay); realDevice().state = ctl.relay; }
     if (!ctl.online) setOnline(true, null);
     return { ok: !!j.ok, acknowledged: !!j.acknowledged, ack: j.ack, expected: j.expected, relay: j.relay, error: j.error };
@@ -584,7 +586,7 @@ function snapshot(user) {
     shutdowns: db.shutdowns.slice(-25).reverse(),
     tickets: db.tickets.slice().reverse(),
     streaks: computeStreaks(now),
-    controller: { configured: ctl.configured, online: ctl.online, lastSeen: ctl.lastSeen, relay: ctl.relay, lastAck: ctl.lastAck, lastCmd: ctl.lastCmd, device: ctl.device, statusSource: ctl.statusSource, error: ctl.error, mock: ctl.mock, url: user.role === 'admin' ? ctlUrl() : undefined },
+    controller: { configured: ctl.configured, online: ctl.online, lastSeen: ctl.lastSeen, relay: ctl.relay, lastAck: ctl.lastAck, lastCmd: ctl.lastCmd, device: ctl.device, statusSource: ctl.statusSource, nanoLink: ctl.nanoLink, error: ctl.error, mock: ctl.mock, url: user.role === 'admin' ? ctlUrl() : undefined },
     notifications: db.audit.filter(e => e.notify && +new Date(e.ts) > now.getTime() - 12 * HOUR).filter(visibleTo(user)).slice(-25).reverse()
   };
 }
